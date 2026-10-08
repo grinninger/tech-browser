@@ -1,0 +1,78 @@
+# Tech Browser
+
+Tech Browser is a portable Chromium browser designed for the restricted Backstage desktop in ConnectWise Control (ScreenConnect). It renders Chromium offscreen and copies each frame into a standard WinForms/GDI surface, avoiding black or incomplete browser windows caused by GPU, DWM, and DirectComposition capture limitations.
+
+The project is intended for technicians who need to open current web applications, device interfaces, and administration portals without disturbing the user's primary desktop session.
+
+## Current implementation
+
+The primary implementation is `native/TechBrowser.Gdi`:
+
+- CefSharp OffScreen with a current Chromium engine
+- software rendering with GPU and DirectComposition disabled
+- WinForms/GDI presentation compatible with Backstage capture
+- address bar, back, forward, reload, and explicit navigation button
+- HTTP handling for localhost and local IP addresses
+- no persistent browser profile, cookies, passwords, or history
+- application, launcher, and CEF diagnostic logs
+- self-contained x64 .NET runtime
+- app-local Visual C++ 2022 runtime deployment
+
+The older Electron implementation remains under `src` as a reference prototype. Its normal Chromium compositor was not consistently visible through Backstage capture.
+
+## Repository layout
+
+```text
+native/TechBrowser.Gdi/   CefSharp OffScreen and WinForms/GDI browser
+scripts/                  publish, package, and verification scripts
+toolbox/                  ScreenConnect toolbox launchers
+src/                      legacy Electron prototype
+test/                     Electron navigation tests
+```
+
+## Requirements
+
+- Windows x64
+- .NET 8 SDK
+- Node.js and pnpm
+
+The build uses the system `dotnet` command. A private SDK installation at `.tools/dotnet/dotnet.exe` is also detected automatically.
+
+## Build the ScreenConnect package
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm pack:toolbox:gdi
+```
+
+The resulting `.scapp` package is written to `dist`. It contains a compressed, self-contained browser payload, so no .NET or Visual C++ installation is required on the endpoint.
+
+Verify the finished package:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-toolbox-gdi.ps1
+```
+
+The verification workflow extracts the actual `.scapp`, starts it through the toolbox launcher, checks the required Visual C++ runtime files and diagnostic logs, and confirms that Chromium produced a rendered frame.
+
+## ScreenConnect deployment
+
+1. Add the generated `.scapp` file to the ConnectWise Control toolbox.
+2. Start it from a Backstage session.
+3. On first launch, allow time for the Chromium payload to extract.
+4. Test a public HTTPS site and the intended internal device or administration interface.
+5. Review the diagnostic files if startup or navigation fails.
+
+Diagnostic files are created beside the extracted payload:
+
+- `Tech-Browser-launcher.log`
+- `Tech-Browser.log`
+- `Tech-Browser-cef.log`
+
+## Security notes
+
+Backstage applications commonly run with elevated privileges. Use this browser only for trusted vendor, customer, and device interfaces. Chromium certificate validation and sandboxing remain enabled. The application does not alter whether ConnectWise displays a connection indicator; that behavior is controlled by the ConnectWise configuration and connection method.
+
+## Status
+
+The project is under active field testing with ConnectWise Control Backstage. Build outputs, local SDKs, runtime payloads, and `.scapp` files are intentionally excluded from version control.

@@ -1,0 +1,14 @@
+node_modules/
+dist/
+release/
+.tools/
+**/bin/
+**/obj/
+.vs/
+.vscode/
+*.user
+*.suo
+*.log
+*.scapp
+.DS_Store
+Thumbs.db
