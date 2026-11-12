@@ -1,11 +1,14 @@
 [CmdletBinding()]
 param(
-    [string]$Artifact = 'dist\Tech-Browser-0.2.3-x64-gdi.scapp'
+    [string]$Artifact
 )
 
 $ErrorActionPreference = 'Stop'
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
+if (-not $Artifact) {
+    $Artifact = "dist\Tech-Browser-$(& (Join-Path $PSScriptRoot 'version.ps1'))-x64-gdi.scapp"
+}
 $distPath = [System.IO.Path]::GetFullPath((Join-Path $projectRoot 'dist')).TrimEnd('\')
 $artifactPath = [System.IO.Path]::GetFullPath((Join-Path $projectRoot $Artifact))
 $verifyPath = [System.IO.Path]::GetFullPath((Join-Path $distPath 'verify-gdi-scapp'))
@@ -44,7 +47,7 @@ if ($firstName -ne '0-Tech-Browser-GDI.vbs') {
 
 [System.IO.Compression.ZipFile]::ExtractToDirectory($artifactPath, $verifyPath)
 $launcherPath = Join-Path $verifyPath '0-Tech-Browser-GDI.vbs'
-foreach ($required in @($launcherPath, (Join-Path $verifyPath '7za.exe'), (Join-Path $verifyPath 'payload.7z'))) {
+foreach ($required in @($launcherPath, (Join-Path $verifyPath '7za.exe'), (Join-Path $verifyPath 'payload.7z'), (Join-Path $verifyPath 'payload.id'))) {
     if (-not (Test-Path -LiteralPath $required)) {
         throw "Required package file is missing: $required"
     }
@@ -62,7 +65,9 @@ finally {
     $env:TECH_BROWSER_SMOKE_IMAGE = $previousSmokeImage
 }
 
+$applicationLogPath = Join-Path $verifyPath 'Tech-Browser.log'
 if ($process.ExitCode -ne 0) {
+    if (Test-Path -LiteralPath $applicationLogPath) { Get-Content -LiteralPath $applicationLogPath | Write-Host }
     throw "Packaged browser smoke test failed with exit code $($process.ExitCode)."
 }
 if (-not (Test-Path -LiteralPath $smokeImagePath)) {
@@ -78,11 +83,18 @@ foreach ($runtimeFile in $runtimeFiles) {
 }
 
 $launcherLogPath = Join-Path $verifyPath 'Tech-Browser-launcher.log'
-$applicationLogPath = Join-Path $verifyPath 'Tech-Browser.log'
 foreach ($logPath in @($launcherLogPath, $applicationLogPath)) {
     if (-not (Test-Path -LiteralPath $logPath)) {
         throw "Expected diagnostic log was not created: $logPath"
     }
+}
+
+# The address-bar rules have no separate test project; the executable checks them itself.
+$selfTest = Start-Process -FilePath (Join-Path $verifyPath 'app\Tech Browser.exe') -ArgumentList '--self-test' `
+    -WorkingDirectory $verifyPath -Wait -PassThru
+if ($selfTest.ExitCode -ne 0) {
+    Get-Content -LiteralPath $applicationLogPath | Write-Host
+    throw "Address self-test failed with exit code $($selfTest.ExitCode)."
 }
 
 $hash = Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256
